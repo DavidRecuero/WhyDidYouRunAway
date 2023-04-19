@@ -1,3 +1,9 @@
+--TO FIX--
+--1. WHITE NOISE/NOISE starts so abruptly
+--2. A last beat sound sounds just before ending the game?
+----------
+
+
 ---------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------
 --VARIABLES--
@@ -5,12 +11,12 @@
 ---------------------------------------------------------------------------------------------------------------
 
 --FULLSCREEN
-local fsAsk = true
+local fullScreen = true
 
---ENEMY
+--NPC
 local xNPC
 local yNPC
-local alfa = 0.0020 --npc "velocity"
+local npcSpeed = 0.002
 
 local npcLineWidth = 5
 local npcSize = 20.0
@@ -24,43 +30,46 @@ local pjLineWidth = 5
 local pjSize = 10.0
 local pjSizeInitial = 10.0
 
-local lineWidthDefault = 5
+local lineWidthDefault = pjLineWidth
 
 --DISTANCE BETWEEN CHARACTERS
 
 local distance
 
---ACTIVATE EVENTS
+--EVENTS TRIGGERS (DISTANCES)
 local startS1 = 300.0
 local beginShake = 300.0
 local beginToDecrease = 250.0
 local startS2 = 100.0
-local startPitido = 60.0
+local startWhistle = 60.0
 local distEnd = 2.0
 
---DEFINE ESCENE
-local escena = 0   -- 0 game, 1 final
-local whatToDo = 3 -- 0 crece, 1 decrece, 2 espera, 3 intro (empieza sonido latido y pasa a 0 al momento)
+--SCENE & STATUS
+local scene = 0   
+-- Game (0), Outro (1)
+
+local charsBeatStatus = 3       
+-- Growth (0), Decrease (1), Waiting (2), Intro -Only to start the Beat sound and go to the 0 value at the moment- (3)
 
 --SOUNDS
 local volMusic = 0.15
 local s1Max = 1.0
-local volLatido = 0.1
-local incVolLatido = 0.2
+local volBeat = 0.1
+local incVolBeat = 0.2
 
 --SHAKE
 local shakeRangeMax = 2.0
 
 --ANIMATION
 local animSize = 10.0
-local repetirAnim = 0         --veces que se ha ejecutado la animcación
-local nRepeticionesAnim = 8   --veces que se hará la animación
-local incrementoEnLatido = 0.05
-local diamMaximo = 11.0
+local animRepeated = 0              --Times the animation has been executed
+local nAnimRepeats = 8              --Times the animation will be executed
+local incrementInBeat = 0.05
+local maxDiameter = 11.0
 local timeToBeginBeats
 local timeBetweenBeats
-local distYToAnim = 100 		  --Distancia del texto respecto a la animación
-local distXToAnim 
+local yDistToAnim = 100 		    --Distance of the text from animation
+local xDistToAnim 
 
 
 ---------------------------------------------------------------------------------------------------------------
@@ -70,12 +79,12 @@ local distXToAnim
 ---------------------------------------------------------------------------------------------------------------
 
 function love.load()
-
+    
 	--love.window.setMode( 1024, 768)
-	love.window.setFullscreen(fsAsk)
+	love.window.setFullscreen(fullScreen)
 
-	if fsAsk == true then distXToAnim = 300				--posición del texto final depende de si fullscreen
-	else distXToAnim = 50 
+	if fullScreen == true then xDistToAnim = 300				--Text last position according to screen 
+	else xDistToAnim = 50 
 	end
 
 	music = love.audio.newSource("Audio/Music/WhyDidYouRunAwayMusicDeep.mp3", "static")
@@ -87,11 +96,11 @@ function love.load()
 	sound2 = love.audio.newSource("Audio/Sounds/noise.mp3", "static")
 		sound2:setVolume(0.0)
 		sound2:setLooping(true)
-	pitido = love.audio.newSource("Audio/Sounds/pitido.wav", "static")
-		pitido:setVolume(0.0)
-        pitido:setLooping(true)
-    latido = love.audio.newSource("Audio/Sounds/Latido.mp3", "static")
-        latido:setVolume(volLatido)
+	whistle = love.audio.newSource("Audio/Sounds/whistle.wav", "static")
+		whistle:setVolume(0.0)
+        whistle:setLooping(true)
+    beat = love.audio.newSource("Audio/Sounds/beat.mp3", "static")
+        beat:setVolume(volBeat)
 
     love.audio.setVolume(1)
 
@@ -100,6 +109,12 @@ function love.load()
 
 	xNPC = love.graphics.getWidth()/2
 	yNPC = love.graphics.getHeight() + 500
+
+
+    music:play()
+	sound1:play()
+	sound2:play()
+
 
 end
 
@@ -111,26 +126,24 @@ end
 
 function love.draw()
 
-	music:play()
-	sound1:play()
-	sound2:play()
+	
+    -------------------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------------------
+    --GAMEPLAY (scene 0)
+    -------------------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------------------
 
-    ---------------------------------------------------------------------------------------------------------------
-    ---------------------------------------------------------------------------------------------------------------
-    --GAMEPLAY
-    ---------------------------------------------------------------------------------------------------------------
-    ---------------------------------------------------------------------------------------------------------------
+    if scene == 0 then
+               
+        --NPC MOVEMENT (Moving the npc before forces the player to go inside it to complete the game. If not, the npc can just complete the game by itself)
+        xNPC = npcSpeed * love.mouse.getX() + (1.0 - npcSpeed) * xNPC
+        yNPC = npcSpeed * love.mouse.getY() + (1.0 - npcSpeed) * yNPC
 
-    if escena == 0 then
-        --ENEMY
-        xNPC = alfa * love.mouse.getX() + (1.0 - alfa) * xNPC
-        yNPC = alfa * love.mouse.getY() + (1.0 - alfa) * yNPC
-
-        --PLAYER
+        --PLAYER MOVEMENT
         xPJ = love.mouse.getX()
-        yPJ = love.mouse.getY()
-
-        --DIST PJ<->ENEMY
+        yPJ = love.mouse.getY() 
+        
+        --CALCULATE DIST PJ<->NPC
         distance = math.sqrt(math.pow(xPJ - xNPC, 2) + math.pow(yPJ - yNPC, 2))
 
     	if distance < beginShake then
@@ -153,7 +166,7 @@ function love.draw()
         	pjLineWidth = lineWidthDefault
         end
 
-        --DRAW ENEMY
+        --DRAW NPC
         love.graphics.setLineWidth( npcLineWidth )
         love.graphics.circle("line", xNPC, yNPC, npcSize, 360)
 
@@ -176,108 +189,111 @@ function love.draw()
         	sound2:setVolume(0)
     	end	
 
-    	if distance < startPitido then
-    		pitido:setVolume(math.pow(1 - (distance/startPitido)/2, 2))
-    		pitido:play()
+    	if distance < startWhistle then
+    		whistle:setVolume(math.pow(1 - (distance/startWhistle)/2, 2))
+    		whistle:play()
         else 
-        	pitido:stop()
+        	whistle:stop()
     	end	
 
         if distance < distEnd then 
             timeToBeginBeats = love.timer.getTime()
             timeBetweenBeats = love.timer.getTime() + 2
-            escena = 1
+            scene = 1
         end
     end
 
     ---------------------------------------------------------------------------------------------------------------
     ---------------------------------------------------------------------------------------------------------------
-    --FINAL
+    --OUTRO (scene 1)
     ---------------------------------------------------------------------------------------------------------------
     ---------------------------------------------------------------------------------------------------------------
 
-    if escena == 1 then
+    if scene == 1 then
 
-        --SE ESCRIBE MENSAJE--
+        --SILENCE - ALL AUDIO STOPPED--
 
         love.audio.stop(music)
         love.audio.stop(sound1)
         love.audio.stop(sound2)
-        love.audio.stop(pitido)
+        love.audio.stop(whistle)
 
-        --WHERE TO PRINT THE TEXT--
+        --FINAL MESSAGE IS PRINTED--
+        
+        --Where the text is going to be printed
         --------------
         --| 1 | 2 | --
         --| 3 | 4 | --
         --------------
+        
         if yPJ <= love.graphics.getHeight()/2 and xPJ <= love.graphics.getWidth()/2 then         --1
 
-            love.graphics.print("Why did you run away?", distXToAnim, yPJ + distYToAnim) --love.graphics.getHeight()/2.2)
+            love.graphics.print("Why did you run away?", xDistToAnim, yPJ + yDistToAnim) --love.graphics.getHeight()/2.2)
 
         elseif yPJ <= love.graphics.getHeight()/2 and xPJ >= love.graphics.getWidth()/2 then     --2
 
-            love.graphics.print("Why did you run away?", love.graphics.getWidth()/2 + distXToAnim, yPJ + distYToAnim)  
+            love.graphics.print("Why did you run away?", love.graphics.getWidth()/2 + xDistToAnim, yPJ + yDistToAnim)  
 
         elseif yPJ >= love.graphics.getHeight()/2 and xPJ <= love.graphics.getWidth()/2 then     --3
 
-            love.graphics.print("Why did you run away?", distXToAnim, yPJ - distYToAnim)
+            love.graphics.print("Why did you run away?", xDistToAnim, yPJ - yDistToAnim)
 
         else                                                                                     --4   
 
-            love.graphics.print("Why did you run away?", love.graphics.getWidth()/2 + distXToAnim, yPJ - distYToAnim)
+            love.graphics.print("Why did you run away?", love.graphics.getWidth()/2 + xDistToAnim, yPJ - yDistToAnim)
 
         end
 
-        --COMIENZA ANIMACIÓN--
+        --BEAT ANIMATION--
 
         if love.timer.getTime() > timeToBeginBeats + 2 then
 
-        	if whatToDo == 3 then
+        	if charsBeatStatus == 3 then
 
-            latido:play()
-			whatToDo = 0
+            beat:play()
+			charsBeatStatus = 0
 			
         	end
 
-            --TAMAÑO CRECE--
-
-            if whatToDo == 0 then
-                if animSize < diamMaximo then
+            --GROWTHS--
+            
+            if charsBeatStatus == 0 then
+                if animSize < maxDiameter then
                                     
                     love.graphics.setLineWidth( animSize / 2 )
                     love.graphics.circle("line", xPJ, yPJ, animSize, 360)
                     love.graphics.circle("line", xPJ, yPJ, animSize * 2, 360)
 
-                    animSize = animSize + incrementoEnLatido
+                    animSize = animSize + incrementInBeat
 
                 else
 
-                    whatToDo = 1
+                    charsBeatStatus = 1
 
                 end
             end
+            
+            --DECREASES--
 
-            --TAMAÑO DECRECE--
-
-            if whatToDo == 1 then
+            if charsBeatStatus == 1 then
                 if animSize > pjSizeInitial then
                                     
                     love.graphics.setLineWidth( animSize / 2 )
                     love.graphics.circle("line", xPJ, yPJ, animSize, 360)
                     love.graphics.circle("line", xPJ, yPJ, animSize * 2, 360)
 
-                    animSize = animSize - incrementoEnLatido
+                    animSize = animSize - incrementInBeat
 
                 else
-                    whatToDo = 2
+                    charsBeatStatus = 2
                     timeBetweenBeats = love.timer.getTime()
                 end
 
             end
 
-            --DESCANSA--
+            --WAITS--
 
-            if whatToDo == 2 then
+            if charsBeatStatus == 2 then
                 if love.timer.getTime() < timeBetweenBeats + 2 then
                                     
                     love.graphics.setLineWidth( 5 )
@@ -289,17 +305,17 @@ function love.draw()
                     love.graphics.circle("line", xPJ, yPJ, pjSizeInitial, 360)
                     love.graphics.circle("line", xPJ, yPJ, pjSizeInitial * 2, 360)                    
 
-                    repetirAnim = repetirAnim + 1
+                    animRepeated = animRepeated + 1
 
-                    if repetirAnim == nRepeticionesAnim then
+                    if animRepeated == nAnimRepeats then
                        love.event.quit()
                     end
                     
-                    latido:play()
+                    beat:play()
 
-                    volLatido = volLatido + incVolLatido
-                    latido:setVolume(volLatido)
-                    whatToDo = 0
+                    volBeat = volBeat + incVolBeat
+                    beat:setVolume(volBeat)
+                    charsBeatStatus = 0
 
                 end
             end
@@ -317,14 +333,15 @@ function love.draw()
     	love.event.quit()
     end
 
-    --solo sentido en versión de navegador (quizá ni aqui) (bloque mov NPC y PJ cuando raton se va de pantalla)
+    --"PAUSES THE GAME" WHEN MOUSE IS OUT OF GAME SCREEN BLOCKS THE MOVEMENT OF NPC AND PLAYER 
+    --Does it makes sense in browsers?
     if (love.mouse.getX() == 0 or love.mouse.getX() == love.graphics.getWidth() - 1 or			--Mouse in the border
        love.mouse.getY() == 0 or love.mouse.getY() == love.graphics.getHeight() - 1) and
-       fsAsk == false then
+       fullScreen == false then
 
-    	alfa = 0;
+    	npcSpeed = 0;
     else
-    	alfa = 0.0015;
+    	npcSpeed = 0.0015;
     end
 
 end
