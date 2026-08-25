@@ -1,6 +1,3 @@
--- TO FIX--
--- 1. Use delta time to keep the same speed in different computers 
-----------
 ---------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------
 -- VARIABLES--
@@ -10,7 +7,7 @@ local Config = {
     fullScreen = true,
     backgroundColour = {255, 255, 255},
     -- NPC
-    npcSpeed = 0.0015,
+    npcSpeed = 0.09,
     npcSizeInitial = 20.0,
     npcInitialX = love.graphics.getWidth() / 2,
     npcInitialY = love.graphics.getHeight() + 500,
@@ -61,7 +58,7 @@ local Anim = {
     size = Config.pjSizeInitial,
     repeated = 0,
     maxRepeats = 8,
-    increment = 0.05,
+    increment = 3.0,
     maxDiameter = 11.0,
     delaySecondsToStartBeats = 2.0,
     outerCircleMultiplier = 2
@@ -119,9 +116,9 @@ end
 
 function love.update(dt)
     if Game.state == "gameplay" then
-        updateGameplay()
+        updateGameplay(dt)
     elseif Game.state == "outro" then
-        updateOutro()
+        updateOutro(dt)
     end
     handleInput()
 end
@@ -134,11 +131,11 @@ function love.draw()
     end
 end
 
-function updateGameplay()
+function updateGameplay(dt)
 
     -- NPC Movement (Moving the npc before forces the player to go inside it to complete the game. If not, the npc can just complete the game by itself)
-    NPC.x = NPC.speed * love.mouse.getX() + (1.0 - NPC.speed) * NPC.x
-    NPC.y = NPC.speed * love.mouse.getY() + (1.0 - NPC.speed) * NPC.y
+    NPC.x = NPC.x + (love.mouse.getX() - NPC.x) * (NPC.speed * dt)
+    NPC.y = NPC.y + (love.mouse.getY() - NPC.y) * (NPC.speed * dt)
 
     -- Player Movement
     Player.x = love.mouse.getX()
@@ -182,7 +179,7 @@ function updateGameplay()
     end
 end
 
-function updateOutro()
+function updateOutro(dt)
     if love.timer.getTime() > Game.timeToBeginBeats + Anim.delaySecondsToStartBeats then
 
         -- Beats Animation begins after the delay
@@ -195,7 +192,7 @@ function updateOutro()
         elseif Game.beatAnimationState == "growth" then
 
             if Anim.size < Anim.maxDiameter then
-                Anim.size = Anim.size + Anim.increment
+                Anim.size = Anim.size + (Anim.increment * dt)
             else
                 Game.beatAnimationState = "decrease"
             end
@@ -204,7 +201,7 @@ function updateOutro()
         elseif Game.beatAnimationState == "decrease" then
 
             if Anim.size > Config.pjSizeInitial then
-                Anim.size = Anim.size - Anim.increment
+                Anim.size = Anim.size - (Anim.increment * dt)
             else
                 Game.beatAnimationState = "waiting"
                 Game.timeBetweenBeats = love.timer.getTime()
