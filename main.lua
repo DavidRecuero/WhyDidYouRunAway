@@ -50,11 +50,11 @@ local Audio = {
     volBeat = 0.1,
     incVolBeat = 0.2,
     paths = {
-        music = "Audio/Music/WhyDidYouRunAwayMusicDeep.mp3",
-        sound1 = "Audio/Sounds/high-theta.mp3",
-        sound2 = "Audio/Sounds/noise.mp3",
-        whistle = "Audio/Sounds/whistle.wav",
-        beat = "Audio/Sounds/beat.mp3"
+        music = "Resources/Audio/Music/WhyDidYouRunAwayMusicDeep.mp3",
+        sound1 = "Resources/Audio/Sounds/high-theta.mp3",
+        sound2 = "Resources/Audio/Sounds/noise.mp3",
+        whistle = "Resources/Audio/Sounds/whistle.wav",
+        beat = "Resources/Audio/Sounds/beat.mp3"
     }
 }
 
