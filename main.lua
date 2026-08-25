@@ -1,8 +1,5 @@
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
--- VARIABLES--
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
+-- VARIABLES ----------------------------------------------------------------------------------------
+-- General Configs
 local Config = {
     fullScreen = true,
     backgroundColour = {255, 255, 255},
@@ -23,6 +20,7 @@ local Config = {
     finalText = "Why did you run away?" -- Final message to display when the player reaches the NPC
 }
 
+-- Diferent game states and events trigger conditions
 local Trigger = {
     -- Distance to trigger events
     startStage1 = 300.0,
@@ -33,9 +31,49 @@ local Trigger = {
     distEnd = 2.0 -- Distance between NPC and player to trigger the outro
 }
 
+-- Outro animation configurations
+local Anim = {
+    size = Config.pjSizeInitial,
+    repeated = 0,
+    maxRepeats = 8,
+    increment = 3.0,
+    maxDiameter = 11.0,
+    delaySecondsToStartBeats = 2.0,
+    outerCircleMultiplier = 2
+}
+
+-- Audio configurations
+local Audio = {
+    audioInitialVolume = 1,
+    volMusic = 0.15,
+    s1Max = 1.0,
+    volBeat = 0.1,
+    incVolBeat = 0.2,
+    paths = {
+        music = "Audio/Music/WhyDidYouRunAwayMusicDeep.mp3",
+        sound1 = "Audio/Sounds/high-theta.mp3",
+        sound2 = "Audio/Sounds/noise.mp3",
+        whistle = "Audio/Sounds/whistle.wav",
+        beat = "Audio/Sounds/beat.mp3"
+    }
+}
+
+-- State Definitions & Runtime Variables
+local GameState = {
+    GAMEPLAY = "gameplay",
+    OUTRO = "outro"
+}
+
+local AnimState = {
+    INTRO = "intro",
+    GROWTH = "growth",
+    DECREASE = "decrease",
+    WAITING = "waiting"
+}
+
 local Game = {
-    state = "gameplay", -- "gameplay" | "outro"
-    beatAnimationState = "intro", -- "growth" | "decrease" | "waiting" | "intro"
+    state = GameState.GAMEPLAY,
+    beatAnimationState = AnimState.INTRO,
     distancePJ_NPC = 0,
     timeToBeginBeats = 0,
     timeBetweenBeats = 0
@@ -47,6 +85,7 @@ local Player = {
     size = Config.pjSizeInitial,
     lineWidth = Config.lineWidth
 }
+
 local NPC = {
     x = 0,
     y = 0,
@@ -54,84 +93,79 @@ local NPC = {
     speed = Config.npcSpeed,
     lineWidth = Config.lineWidth
 }
-local Anim = {
-    size = Config.pjSizeInitial,
-    repeated = 0,
-    maxRepeats = 8,
-    increment = 3.0,
-    maxDiameter = 11.0,
-    delaySecondsToStartBeats = 2.0,
-    outerCircleMultiplier = 2
-}
-local Audio = {
-    audioInitialVolume = 1,
-    volMusic = 0.15,
-    s1Max = 1.0,
-    volBeat = 0.1,
-    incVolBeat = 0.2
-}
 
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
--- LOAD-- ONCE AT THE BEGINNING
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
+-- FUNCTIONS ----------------------------------------------------------------------------------------
 
-function love.load()
-    love.window.setFullscreen(Config.fullScreen)
-    Config.xDistToAnim = Config.fullScreen and Config.xDistToAnimFS or Config.xDistToAnimWin
+-- Interpolates the volume factor based on the current distance between two points
+local function getVolumeFactor(currentDist, startDist, endDist)
 
-    -- Audio Loads
-    Audio.music = love.audio.newSource("Audio/Music/WhyDidYouRunAwayMusicDeep.mp3", "static")
-    Audio.music:setVolume(Audio.volMusic)
+        local t = (startDist - currentDist) / (startDist - endDist)
 
-    Audio.sound1 = love.audio.newSource("Audio/Sounds/high-theta.mp3", "static")
-    Audio.sound1:setVolume(0.0)
+        if t < 0 then t = 0 end
+        if t > 1 then t = 1 end
 
-    Audio.sound2 = love.audio.newSource("Audio/Sounds/noise.mp3", "static")
-    Audio.sound2:setVolume(0.0)
-
-    Audio.whistle = love.audio.newSource("Audio/Sounds/whistle.wav", "static")
-    Audio.whistle:setVolume(0.0)
-
-    Audio.beat = love.audio.newSource("Audio/Sounds/beat.mp3", "static")
-    Audio.beat:setVolume(Audio.volBeat)
-
-    for _, src in pairs({Audio.music, Audio.sound1, Audio.sound2, Audio.whistle}) do
-        src:setLooping(true)
-    end
-
-    love.audio.setVolume(Audio.audioInitialVolume)
-    love.graphics.setColor(Config.backgroundColour[1], Config.backgroundColour[2], Config.backgroundColour[3])
-    love.mouse.setVisible(false)
-
-    NPC.x = Config.npcInitialX
-    NPC.y = Config.npcInitialY
-
-    Audio.music:play()
-    Audio.sound1:play()
-    Audio.sound2:play()
-    Audio.whistle:play()
+        return t
 end
 
-function love.update(dt)
-    if Game.state == "gameplay" then
-        updateGameplay(dt)
-    elseif Game.state == "outro" then
-        updateOutro(dt)
-    end
-    handleInput()
-end
+-- Calculates the volume of the different sounds according to the position between the NPC and the player
+local function updateAudioDistances()
 
-function love.draw()
-    if Game.state == "gameplay" then
-        drawGameplay()
-    elseif Game.state == "outro" then
-        drawOutro()
+    -- Soft Distortion Sound (Sound 1)
+    if Game.distancePJ_NPC < Trigger.startStage1 then
+
+        -- Calculate the volume factor based on the current distance and the start/end distances for the sound
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage1, Trigger.startStage2)
+        -- The volFactor ^ 2 is used to create a smoother transition in volume as the player approaches the NPC
+        Audio.sound1:setVolume(volFactor ^ 2 * Audio.s1Max)
+        -- The volume of the music is adjusted based on the distance between the player and the NPC
+        Audio.music:setVolume((Game.distancePJ_NPC / Trigger.startStage1) * Audio.volMusic)
+    else
+        Audio.sound1:setVolume(0)
+        Audio.music:setVolume(Audio.volMusic)
+    end
+
+    -- Hard Distortion Sound (Sound 2)
+    if Game.distancePJ_NPC < Trigger.startStage2 then
+
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage2, Trigger.startWhistle)
+        Audio.sound2:setVolume(volFactor ^ 2)
+    else
+        Audio.sound2:setVolume(0)
+    end
+
+    -- Whistle Sound
+    if Game.distancePJ_NPC < Trigger.startWhistle then
+
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startWhistle, Trigger.distEnd)
+        Audio.whistle:setVolume(volFactor ^ 2)
+    else
+        Audio.whistle:setVolume(0)
     end
 end
 
-function updateGameplay(dt)
+-- Pauses the game (stops the NPC) when the mouse is out of the boundaries of the screen in windowed versions
+local function gamePauser()
+    
+    local mx, my = love.mouse.getX(), love.mouse.getY()
+    local gw, gh = love.graphics.getWidth(), love.graphics.getHeight()
+
+    if (mx == 0 or mx == gw - 1 or my == 0 or my == gh - 1) and not Config.fullScreen then
+        NPC.speed = 0
+    else
+        NPC.speed = Config.npcSpeed
+    end
+end
+
+-- esc = quit game
+function love.keypressed(key)
+    if key == "escape" then
+        love.event.quit()
+    end
+end
+
+-- LOOP FUNCTIONS ----------------------------------------------------------------------------------------
+
+local function updateGameplay(dt)
 
     -- NPC Movement (Moving the npc before forces the player to go inside it to complete the game. If not, the npc can just complete the game by itself)
     NPC.x = NPC.x + (love.mouse.getX() - NPC.x) * (NPC.speed * dt)
@@ -142,7 +176,7 @@ function updateGameplay(dt)
     Player.y = love.mouse.getY()
 
     -- Calculate distance between player and NPC
-    Game.distancePJ_NPC = math.sqrt(math.pow(Player.x - NPC.x, 2) + math.pow(Player.y - NPC.y, 2))
+    Game.distancePJ_NPC = math.sqrt((Player.x - NPC.x)^2 + (Player.y - NPC.y)^2)
 
     -- Shake
     if Game.distancePJ_NPC < Trigger.beginShake then
@@ -171,7 +205,9 @@ function updateGameplay(dt)
     if Game.distancePJ_NPC < Trigger.distEnd then
         Game.timeToBeginBeats = love.timer.getTime()
         Game.timeBetweenBeats = love.timer.getTime() + Anim.delaySecondsToStartBeats
-        Game.state = "outro"
+
+        Game.state = GameState.OUTRO
+
         love.audio.stop(Audio.music)
         love.audio.stop(Audio.sound1)
         love.audio.stop(Audio.sound2)
@@ -179,36 +215,36 @@ function updateGameplay(dt)
     end
 end
 
-function updateOutro(dt)
+local function updateOutro(dt)
     if love.timer.getTime() > Game.timeToBeginBeats + Anim.delaySecondsToStartBeats then
 
         -- Beats Animation begins after the delay
-        if Game.beatAnimationState == "intro" then
+        if Game.beatAnimationState == AnimState.INTRO then
 
             Audio.beat:play()
-            Game.beatAnimationState = "growth"
+            Game.beatAnimationState = AnimState.GROWTH
 
             -- NPC/Player are growing
-        elseif Game.beatAnimationState == "growth" then
+        elseif Game.beatAnimationState == AnimState.GROWTH then
 
             if Anim.size < Anim.maxDiameter then
                 Anim.size = Anim.size + (Anim.increment * dt)
             else
-                Game.beatAnimationState = "decrease"
+                Game.beatAnimationState = AnimState.DECREASE
             end
 
             -- NPC/Player are decreasing
-        elseif Game.beatAnimationState == "decrease" then
+        elseif Game.beatAnimationState == AnimState.DECREASE then
 
             if Anim.size > Config.pjSizeInitial then
                 Anim.size = Anim.size - (Anim.increment * dt)
             else
-                Game.beatAnimationState = "waiting"
+                Game.beatAnimationState = AnimState.WAITING
                 Game.timeBetweenBeats = love.timer.getTime()
             end
 
             -- NPC/Player are waiting for the next beat
-        elseif Game.beatAnimationState == "waiting" then
+        elseif Game.beatAnimationState == AnimState.WAITING then
 
             if love.timer.getTime() >= Game.timeBetweenBeats + Anim.delaySecondsToStartBeats then
                 Anim.repeated = Anim.repeated + 1
@@ -218,7 +254,7 @@ function updateOutro(dt)
                     Audio.beat:play()
                     Audio.volBeat = Audio.volBeat + Audio.incVolBeat
                     Audio.beat:setVolume(Audio.volBeat)
-                    Game.beatAnimationState = "growth"
+                    Game.beatAnimationState = AnimState.GROWTH
                 else
                     --ENDGAME
                     love.event.quit()
@@ -229,7 +265,7 @@ function updateOutro(dt)
     end
 end
 
-function drawGameplay()
+local function drawGameplay()
     love.graphics.setLineWidth(NPC.lineWidth)
     love.graphics.circle("line", NPC.x, NPC.y, NPC.size)
 
@@ -237,7 +273,7 @@ function drawGameplay()
     love.graphics.circle("line", Player.x, Player.y, Player.size)
 end
 
-function drawOutro()
+local function drawOutro()
 
     -- Draw the final text message
     local textX = (Player.x <= love.graphics.getWidth() / 2) and Config.xDistToAnim or
@@ -249,7 +285,7 @@ function drawOutro()
     if love.timer.getTime() > Game.timeToBeginBeats + Anim.delaySecondsToStartBeats then
 
         -- Draw the NPC and Player circles with the current size based on the beat animation state
-        if Game.beatAnimationState == "growth" or Game.beatAnimationState == "decrease" then
+        if Game.beatAnimationState == AnimState.GROWTH or Game.beatAnimationState == AnimState.DECREASE then
 
             -- Draw the circles with a line width proportional to their size
             local proportionalLineWidth = Config.lineWidth * (Anim.size / Config.pjSizeInitial)
@@ -259,7 +295,7 @@ function drawOutro()
             love.graphics.circle("line", Player.x, Player.y, Anim.size * 2)
 
             -- Draw the circles in the "waiting" state, waiting between beats
-        elseif Game.beatAnimationState == "waiting" then
+        elseif Game.beatAnimationState == AnimState.WAITING then
 
             -- Draw the circles with the initial size values
             love.graphics.setLineWidth(Config.lineWidth)
@@ -270,65 +306,60 @@ function drawOutro()
     end
 end
 
--- Interpolates the volume factor based on the current distance between two points
-function getVolumeFactor(currentDist, startDist, endDist)
+-- LOAD ----------------------------------------------------------------------------------------
+function love.load()
+    love.window.setFullscreen(Config.fullScreen)
+    Config.xDistToAnim = Config.fullScreen and Config.xDistToAnimFS or Config.xDistToAnimWin
 
-        local t = (startDist - currentDist) / (startDist - endDist)
+    -- Audio Loads
+    Audio.music = love.audio.newSource(Audio.paths.music, "static")
+    Audio.music:setVolume(Audio.volMusic)
 
-        if t < 0 then t = 0 end
-        if t > 1 then t = 1 end
+    Audio.sound1 = love.audio.newSource(Audio.paths.sound1, "static")
+    Audio.sound1:setVolume(0.0)
 
-        return t
+    Audio.sound2 = love.audio.newSource(Audio.paths.sound2, "static")
+    Audio.sound2:setVolume(0.0)
+
+    Audio.whistle = love.audio.newSource(Audio.paths.whistle, "static")
+    Audio.whistle:setVolume(0.0)
+
+    Audio.beat = love.audio.newSource(Audio.paths.beat, "static")
+    Audio.beat:setVolume(Audio.volBeat)
+
+    for _, src in pairs({Audio.music, Audio.sound1, Audio.sound2, Audio.whistle}) do
+        src:setLooping(true)
+    end
+
+    love.audio.setVolume(Audio.audioInitialVolume)
+    love.graphics.setColor(Config.backgroundColour[1], Config.backgroundColour[2], Config.backgroundColour[3])
+    love.mouse.setVisible(false)
+
+    NPC.x = Config.npcInitialX
+    NPC.y = Config.npcInitialY
+
+    Audio.music:play()
+    Audio.sound1:play()
+    Audio.sound2:play()
+    Audio.whistle:play()
 end
 
-function updateAudioDistances()
-
-    -- Soft Distortion Sound (Sound 1)
-    if Game.distancePJ_NPC < Trigger.startStage1 then
-
-        -- Calculate the volume factor based on the current distance and the start/end distances for the sound
-        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage1, Trigger.startStage2)
-        -- The math.pow(volFactor, 2) is used to create a smoother transition in volume as the player approaches the NPC
-        Audio.sound1:setVolume(math.pow(volFactor, 2) * Audio.s1Max)
-        -- The volume of the music is adjusted based on the distance between the player and the NPC
-        Audio.music:setVolume((Game.distancePJ_NPC / Trigger.startStage1) * Audio.volMusic)
-    else
-        Audio.sound1:setVolume(0)
-        Audio.music:setVolume(Audio.volMusic)
+---- LOOP ----------------------------------------------------------------------------------------
+function love.update(dt)
+    if Game.state == GameState.GAMEPLAY then
+        updateGameplay(dt)
+    elseif Game.state == GameState.OUTRO then
+        updateOutro(dt)
     end
 
-    -- Hard Distortion Sound (Sound 2)
-    if Game.distancePJ_NPC < Trigger.startStage2 then
+    gamePauser()
 
-        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage2, Trigger.startWhistle)
-        Audio.sound2:setVolume(math.pow(volFactor, 2))
-    else
-        Audio.sound2:setVolume(0)
-    end
-
-    -- Whistle Sound
-    if Game.distancePJ_NPC < Trigger.startWhistle then
-
-        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startWhistle, Trigger.distEnd)
-        Audio.whistle:setVolume(math.pow(volFactor, 2))
-    else
-        Audio.whistle:setVolume(0)
-    end
 end
 
-function handleInput()
-    -- esc = quit game
-    if love.keyboard.isDown("escape") then
-        love.event.quit()
-    end
-
-    -- "PAUSES THE GAME" WHEN MOUSE IS OUT OF GAME SCREEN BLOCKS THE MOVEMENT OF NPC AND PLAYER
-    local mx, my = love.mouse.getX(), love.mouse.getY()
-    local gw, gh = love.graphics.getWidth(), love.graphics.getHeight()
-
-    if (mx == 0 or mx == gw - 1 or my == 0 or my == gh - 1) and not Config.fullScreen then
-        NPC.speed = 0
-    else
-        NPC.speed = Config.npcSpeed
+function love.draw()
+    if Game.state == GameState.GAMEPLAY then
+        drawGameplay()
+    elseif Game.state == GameState.OUTRO then
+        drawOutro()
     end
 end
