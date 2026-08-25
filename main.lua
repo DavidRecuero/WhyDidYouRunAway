@@ -1,6 +1,5 @@
 -- TO FIX--
--- 1. WHITE NOISE/NOISE starts so abruptly
--- 2. Use delta time to keep the same speed in different computers 
+-- 1. Use delta time to keep the same speed in different computers 
 ----------
 ---------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------
@@ -115,13 +114,8 @@ function love.load()
     Audio.music:play()
     Audio.sound1:play()
     Audio.sound2:play()
+    Audio.whistle:play()
 end
-
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
--- DRAW--ONCE PER FRAME--CLEAN/DRAW
----------------------------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
 
 function love.update(dt)
     if Game.state == "gameplay" then
@@ -185,32 +179,6 @@ function updateGameplay()
         love.audio.stop(Audio.sound1)
         love.audio.stop(Audio.sound2)
         love.audio.stop(Audio.whistle)
-    end
-end
-
-function updateAudioDistances()
-
-    -- Soft Distortion Sound
-    if Game.distancePJ_NPC < Trigger.startStage1 then
-        Audio.sound1:setVolume(math.pow(1 - (Game.distancePJ_NPC / Trigger.startStage1) / 2, 2) * Audio.s1Max)
-        Audio.music:setVolume((1 - ((Trigger.startStage1 - Game.distancePJ_NPC) / Trigger.startStage1)) * Audio.volMusic)
-    else
-        Audio.sound1:setVolume(0)
-    end
-
-    -- Hard Distortion Sound
-    if Game.distancePJ_NPC < Trigger.startStage2 then
-        Audio.sound2:setVolume(math.pow(1 - (Game.distancePJ_NPC / Trigger.startStage2) / 2, 2))
-    else
-        Audio.sound2:setVolume(0)
-    end
-
-    -- Whistle Sound
-    if Game.distancePJ_NPC < Trigger.startWhistle then
-        Audio.whistle:setVolume(math.pow(1 - (Game.distancePJ_NPC / Trigger.startWhistle) / 2, 2))
-        Audio.whistle:play()
-    else
-        Audio.whistle:stop()
     end
 end
 
@@ -302,6 +270,52 @@ function drawOutro()
             love.graphics.circle("line", Player.x, Player.y, Config.pjSizeInitial * Anim.outerCircleMultiplier)
 
         end
+    end
+end
+
+-- Interpolates the volume factor based on the current distance between two points
+function getVolumeFactor(currentDist, startDist, endDist)
+
+        local t = (startDist - currentDist) / (startDist - endDist)
+
+        if t < 0 then t = 0 end
+        if t > 1 then t = 1 end
+
+        return t
+end
+
+function updateAudioDistances()
+
+    -- Soft Distortion Sound (Sound 1)
+    if Game.distancePJ_NPC < Trigger.startStage1 then
+
+        -- Calculate the volume factor based on the current distance and the start/end distances for the sound
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage1, Trigger.startStage2)
+        -- The math.pow(volFactor, 2) is used to create a smoother transition in volume as the player approaches the NPC
+        Audio.sound1:setVolume(math.pow(volFactor, 2) * Audio.s1Max)
+        -- The volume of the music is adjusted based on the distance between the player and the NPC
+        Audio.music:setVolume((Game.distancePJ_NPC / Trigger.startStage1) * Audio.volMusic)
+    else
+        Audio.sound1:setVolume(0)
+        Audio.music:setVolume(Audio.volMusic)
+    end
+
+    -- Hard Distortion Sound (Sound 2)
+    if Game.distancePJ_NPC < Trigger.startStage2 then
+
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startStage2, Trigger.startWhistle)
+        Audio.sound2:setVolume(math.pow(volFactor, 2))
+    else
+        Audio.sound2:setVolume(0)
+    end
+
+    -- Whistle Sound
+    if Game.distancePJ_NPC < Trigger.startWhistle then
+
+        local volFactor = getVolumeFactor(Game.distancePJ_NPC, Trigger.startWhistle, Trigger.distEnd)
+        Audio.whistle:setVolume(math.pow(volFactor, 2))
+    else
+        Audio.whistle:setVolume(0)
     end
 end
 
